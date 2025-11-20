@@ -511,6 +511,24 @@ class StreamV2VWrapper:
                 )
 
         try:
+            if acceleration == "none":
+                if self.use_cached_attn:
+                    attn_processors = stream.pipe.unet.attn_processors
+                    new_attn_processors = {}
+                    for key, attn_processor in attn_processors.items():
+                        assert isinstance(attn_processor, AttnProcessor2_0), \
+                              "We only replace 'AttentionProcessor' to 'CachedSTAttentionProcessor'"
+                        new_attn_processors[key] = CachedSTAttnProcessor2_0(name=key,
+                                                                               use_feature_injection=self.use_feature_injection,
+                                                                               feature_injection_strength=self.feature_injection_strength,
+                                                                               feature_similarity_threshold=self.feature_similarity_threshold,
+                                                                               interval=self.cache_interval, 
+                                                                               max_frames=self.cache_maxframes,
+                                                                               use_tome_cache=self.use_tome_cache,
+                                                                               tome_metric=self.tome_metric,
+                                                                               tome_ratio=self.tome_ratio,
+                                                                               use_grid=self.use_grid)
+                    stream.pipe.unet.set_attn_processor(new_attn_processors)
             if acceleration == "xformers":
                 stream.pipe.enable_xformers_memory_efficient_attention()
                 if self.use_cached_attn:
@@ -622,7 +640,7 @@ class StreamV2VWrapper:
                         unet_dim=stream.unet.config.in_channels,
                     )
                     compile_unet(
-                        stream.unet,
+                        unet_network,
                         unet_model,
                         unet_path + ".onnx",
                         unet_path + ".opt.onnx",
@@ -665,18 +683,18 @@ class StreamV2VWrapper:
                         opt_batch_size=stream.frame_bff_size,
                     )
 
-                cuda_steram = cuda.Stream()
+                cuda_stream = cuda.Stream()
 
                 vae_config = stream.vae.config
                 vae_dtype = stream.vae.dtype
 
                 stream.unet = UNet2DConditionModelEngine(
-                    unet_path, cuda_steram, use_cuda_graph=False
+                    unet_path, cuda_stream, use_cuda_graph=False
                 )
                 stream.vae = AutoencoderKLEngine(
                     vae_encoder_path,
                     vae_decoder_path,
-                    cuda_steram,
+                    cuda_stream,
                     stream.pipe.vae_scale_factor,
                     use_cuda_graph=False,
                 )
