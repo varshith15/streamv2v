@@ -28,9 +28,9 @@ class CachedSTAttnProcessor2_0:
     def __init__(self, name=None, use_feature_injection=False,
                  feature_injection_strength=0.8, 
                  feature_similarity_threshold=0.98,
-                 interval=4, 
+                 interval=1, 
                  max_frames=4, 
-                 use_tome_cache=False, 
+                 use_tome_cache=True, 
                  tome_metric="keys", 
                  use_grid=False, 
                  tome_ratio=0.5):
@@ -95,7 +95,7 @@ class CachedSTAttnProcessor2_0:
         attention_mask: Optional[torch.FloatTensor] = None,
         temb: Optional[torch.FloatTensor] = None,
         scale: float = 1.0,
-        kv_cache: Optional[torch.FloatTensor] = None,
+        kvo_cache: Optional[torch.FloatTensor] = None,
     ) -> torch.FloatTensor:
         residual = hidden_states
         if attn.spatial_norm is not None:
@@ -190,7 +190,7 @@ class CachedSTAttnProcessor2_0:
         
         self.frame_id += 1
         
-        return hidden_states, kv_cache
+        return hidden_states, kvo_cache
 
 
 
