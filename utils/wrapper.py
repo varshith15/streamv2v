@@ -727,14 +727,14 @@ class StreamV2VWrapper:
                 vae_dtype = stream.vae.dtype
 
                 stream.unet = UNet2DConditionModelEngine(
-                    unet_path, cuda_stream, use_cuda_graph=False
+                    unet_path, cuda_stream, use_cuda_graph=True
                 )
                 stream.vae = AutoencoderKLEngine(
                     vae_encoder_path,
                     vae_decoder_path,
                     cuda_stream,
                     stream.pipe.vae_scale_factor,
-                    use_cuda_graph=False,
+                    use_cuda_graph=True,
                 )
                 setattr(stream.vae, "config", vae_config)
                 setattr(stream.vae, "dtype", vae_dtype)

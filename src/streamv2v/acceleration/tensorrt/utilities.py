@@ -323,7 +323,7 @@ class Engine:
             if not noerror:
                 raise ValueError("ERROR: inference failed.")
             # CRITICAL: Synchronize stream to ensure computation completes before returning
-            stream.synchronize()
+            CUASSERT(cudart.cudaStreamSynchronize(stream.ptr))
 
         return self.tensors
 
