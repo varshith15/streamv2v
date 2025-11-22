@@ -147,8 +147,14 @@ class CachedSTAttnProcessor2_0:
             if cached_key is not None:
                 cached_key_reshaped = cached_key.transpose(0, 1).flatten(1, 2)
                 cached_value_reshaped = cached_value.transpose(0, 1).flatten(1, 2)
-                key = torch.cat([curr_key, cached_key_reshaped], dim=1)
-                value = torch.cat([curr_value, cached_value_reshaped], dim=1)
+                try:
+                    key = torch.cat([curr_key, cached_key_reshaped], dim=1)
+                    value = torch.cat([curr_value, cached_value_reshaped], dim=1)
+                except Exception as e:
+                    print(self.name)
+                    print(cached_key_reshaped.shape, curr_key.shape, cached_key.shape)
+                    print(cached_value_reshaped.shape, curr_value.shape, cached_value.shape)
+                    exit(0)
 
         inner_dim = key.shape[-1]
         head_dim = inner_dim // attn.heads

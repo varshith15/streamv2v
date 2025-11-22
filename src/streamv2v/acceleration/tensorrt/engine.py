@@ -14,6 +14,7 @@ class UNet2DConditionModelEngine:
         self.engine = Engine(filepath)
         self.stream = stream
         self.use_cuda_graph = use_cuda_graph
+        self._last_shapes = None
 
         self.engine.load()
         self.engine.activate()
@@ -29,18 +30,22 @@ class UNet2DConditionModelEngine:
         if timestep.dtype != torch.float32:
             timestep = timestep.float()
 
-        kvo_cache_in_dict = {"kvo_cache_in_{i}": kvo_cache.shape for i, kvo_cache in enumerate(kvo_cache_list)}
-        kvo_cache_out_dict = {"kvo_cache_out_{i}": kvo_cache.shape for i, kvo_cache in enumerate(kvo_cache_list)}
+        kvo_cache_in_shape_dict = {f"kvo_cache_in_{i}": kvo_cache.shape for i, kvo_cache in enumerate(kvo_cache_list)}
+        kvo_cache_out_shape_dict = {f"kvo_cache_out_{i}": kvo_cache.shape for i, kvo_cache in enumerate(kvo_cache_list)}
+        kvo_cache_in_dict = {f"kvo_cache_in_{i}": kvo_cache for i, kvo_cache in enumerate(kvo_cache_list)}
 
+        shape_dict = {
+            "sample": latent_model_input.shape,
+            "timestep": timestep.shape,
+            "encoder_hidden_states": encoder_hidden_states.shape,
+            "latent": latent_model_input.shape,
+            **kvo_cache_in_shape_dict,
+            **kvo_cache_out_shape_dict,
+        }
+        
+        # Only allocate buffers if shapes changed (now optimized in allocate_buffers)
         self.engine.allocate_buffers(
-            shape_dict={
-                "sample": latent_model_input.shape,
-                "timestep": timestep.shape,
-                "encoder_hidden_states": encoder_hidden_states.shape,
-                "latent": latent_model_input.shape,
-                **kvo_cache_in_dict,
-                **kvo_cache_out_dict,
-            },
+            shape_dict=shape_dict,
             device=latent_model_input.device,
         )
 
@@ -56,7 +61,7 @@ class UNet2DConditionModelEngine:
         )
         noise_pred = output["latent"]
         kvo_cache_out = [output[f"kvo_cache_out_{i}"] for i in range(len(kvo_cache_list))]
-        return UNet2DConditionOutput(sample=noise_pred, kvo_cache=kvo_cache_out)
+        return noise_pred, kvo_cache_out
 
     def to(self, *args, **kwargs):
         pass
@@ -86,16 +91,18 @@ class AutoencoderKLEngine:
         self.decoder.activate()
 
     def encode(self, images: torch.Tensor, **kwargs):
+        shape_dict = {
+            "images": images.shape,
+            "latent": (
+                images.shape[0],
+                4,
+                images.shape[2] // self.vae_scale_factor,
+                images.shape[3] // self.vae_scale_factor,
+            ),
+        }
+        # Optimized: only reallocates if shapes changed
         self.encoder.allocate_buffers(
-            shape_dict={
-                "images": images.shape,
-                "latent": (
-                    images.shape[0],
-                    4,
-                    images.shape[2] // self.vae_scale_factor,
-                    images.shape[3] // self.vae_scale_factor,
-                ),
-            },
+            shape_dict=shape_dict,
             device=images.device,
         )
         latents = self.encoder.infer(
@@ -106,16 +113,18 @@ class AutoencoderKLEngine:
         return AutoencoderTinyOutput(latents=latents)
 
     def decode(self, latent: torch.Tensor, **kwargs):
+        shape_dict = {
+            "latent": latent.shape,
+            "images": (
+                latent.shape[0],
+                3,
+                latent.shape[2] * self.vae_scale_factor,
+                latent.shape[3] * self.vae_scale_factor,
+            ),
+        }
+        # Optimized: only reallocates if shapes changed
         self.decoder.allocate_buffers(
-            shape_dict={
-                "latent": latent.shape,
-                "images": (
-                    latent.shape[0],
-                    3,
-                    latent.shape[2] * self.vae_scale_factor,
-                    latent.shape[3] * self.vae_scale_factor,
-                ),
-            },
+            shape_dict=shape_dict,
             device=latent.device,
         )
         images = self.decoder.infer(

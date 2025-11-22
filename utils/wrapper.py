@@ -32,11 +32,11 @@ class UNet2DConditionModelV2V(torch.nn.Module):
             formatted_cache.append(block)
         
         model_pred, formatted_cache = self.unet(x, timestep, encoder_hidden_states, kvo_cache=formatted_cache, return_dict=False)
-        kvo_cache = []
+        kvo_cache_out = []
         for block in formatted_cache:
             for layer in block:
-                kvo_cache.append(layer[0])
-        return model_pred, *kvo_cache
+                kvo_cache_out.append(layer[0])
+        return model_pred, kvo_cache_out
 
 
 torch.set_grad_enabled(False)

@@ -244,6 +244,9 @@ class UNet(BaseModel):
     def get_input_names(self):
         return ["sample", "timestep", "encoder_hidden_states"] + self.get_kvo_cache_names("in")
 
+    def get_output_names(self):
+        return ["latent"] + self.get_kvo_cache_names("out")
+
     def get_kvo_cache_names(self, in_out: str):
         return [f"kvo_cache_{in_out}_0", f"kvo_cache_{in_out}_1", f"kvo_cache_{in_out}_2", f"kvo_cache_{in_out}_3", f"kvo_cache_{in_out}_4", f"kvo_cache_{in_out}_5", f"kvo_cache_{in_out}_6", f"kvo_cache_{in_out}_7", f"kvo_cache_{in_out}_8", f"kvo_cache_{in_out}_9", f"kvo_cache_{in_out}_10", f"kvo_cache_{in_out}_11", f"kvo_cache_{in_out}_12", f"kvo_cache_{in_out}_13", f"kvo_cache_{in_out}_14", f"kvo_cache_{in_out}_15"]
 
@@ -271,7 +274,7 @@ class UNet(BaseModel):
             "timestep": {0: "2B"},
             "encoder_hidden_states": {0: "2B"},
             "latent": {0: "2B", 2: "H", 3: "W"},
-            **{name: {"2": "2B"} for name in self.get_kvo_cache_names("in")},
+            **{name: {2: "2B"} for name in self.get_kvo_cache_names("in")},
             **{name: {0: "2B"} for name in self.get_kvo_cache_names("out")},
         }
 
@@ -302,7 +305,6 @@ class UNet(BaseModel):
                 (max_batch, self.text_maxlen, self.embedding_dim),
             ],
             **{name: profile for name, profile in zip(self.get_kvo_cache_names("in"), self.get_kvo_cache_input_profile(min_batch, batch_size, max_batch))},
-            **{name: profile for name, profile in zip(self.get_kvo_cache_names("out"), self.get_kvo_cache_input_profile(min_batch, batch_size, max_batch))}
         }
 
     def get_kvo_cache_shape(self, batch_size):
@@ -346,7 +348,7 @@ class UNet(BaseModel):
             torch.zeros(3, 4, 2 * batch_size, 4096, 320, dtype=torch.float16).to(self.device),
             torch.zeros(3, 4, 2 * batch_size, 4096, 320, dtype=torch.float16).to(self.device),
             torch.zeros(3, 4, 2 * batch_size, 1024, 640, dtype=torch.float16).to(self.device),
-            torch.zeros(3, 4, 2 * batch_size, 256, 1280, dtype=torch.float16).to(self.device),
+            torch.zeros(3, 4, 2 * batch_size, 1024, 640, dtype=torch.float16).to(self.device),
             torch.zeros(3, 4, 2 * batch_size, 256, 1280, dtype=torch.float16).to(self.device),
             torch.zeros(3, 4, 2 * batch_size, 256, 1280, dtype=torch.float16).to(self.device),
             torch.zeros(3, 4, 2 * batch_size, 64, 1280, dtype=torch.float16).to(self.device),

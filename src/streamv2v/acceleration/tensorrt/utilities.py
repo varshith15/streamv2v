@@ -246,6 +246,23 @@ class Engine:
             self.context = self.engine.create_execution_context()
 
     def allocate_buffers(self, shape_dict=None, device="cuda"):
+        # Check if we need to reallocate (shapes changed)
+        need_realloc = False
+        if not hasattr(self, '_last_shape_dict') or self._last_shape_dict != shape_dict:
+            need_realloc = True
+            self._last_shape_dict = shape_dict.copy() if shape_dict else None
+        
+        if not need_realloc and hasattr(self, 'tensors') and self.tensors:
+            # Buffers already allocated with same shapes, just update input shapes in context
+            if shape_dict:
+                for i in range(self.engine.num_io_tensors):
+                    name = self.engine.get_tensor_name(i)
+                    if name in shape_dict and self.engine.get_tensor_mode(name) == trt.TensorIOMode.INPUT:
+                        if self.context:
+                            self.context.set_input_shape(name, shape_dict[name])
+            return
+        
+        # Allocate new buffers only when needed
         for i in range(self.engine.num_io_tensors):
             name = self.engine.get_tensor_name(i)
             if shape_dict and name in shape_dict:
@@ -272,8 +289,13 @@ class Engine:
             self.tensors[name] = tensor
 
     def infer(self, feed_dict, stream, use_cuda_graph=False):
+        # Optimize: only copy if tensor addresses are different (avoid unnecessary copies)
         for name, buf in feed_dict.items():
-            self.tensors[name].copy_(buf)
+            if self.tensors[name].data_ptr() != buf.data_ptr():
+                self.tensors[name].copy_(buf, non_blocking=True)
+            else:
+                # If same tensor, just update the address (no copy needed)
+                self.tensors[name] = buf
 
         for name, tensor in self.tensors.items():
             self.context.set_tensor_address(name, tensor.data_ptr())
@@ -287,6 +309,8 @@ class Engine:
                 noerror = self.context.execute_async_v3(stream.ptr)
                 if not noerror:
                     raise ValueError("ERROR: inference failed.")
+                # Synchronize before capture
+                CUASSERT(cudart.cudaStreamSynchronize(stream.ptr))
                 # capture cuda graph
                 CUASSERT(
                     cudart.cudaStreamBeginCapture(stream.ptr, cudart.cudaStreamCaptureMode.cudaStreamCaptureModeGlobal)
@@ -298,6 +322,8 @@ class Engine:
             noerror = self.context.execute_async_v3(stream.ptr)
             if not noerror:
                 raise ValueError("ERROR: inference failed.")
+            # CRITICAL: Synchronize stream to ensure computation completes before returning
+            stream.synchronize()
 
         return self.tensors
 
@@ -435,6 +461,7 @@ def export_onnx(
             input_names=model_data.get_input_names(),
             output_names=model_data.get_output_names(),
             dynamic_axes=model_data.get_dynamic_axes(),
+            dynamo = False,
         )
     del model
     gc.collect()
