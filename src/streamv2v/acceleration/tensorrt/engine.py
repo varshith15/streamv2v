@@ -1,9 +1,9 @@
 from typing import *
 
 import torch
-from diffusers.models.autoencoder_tiny import AutoencoderTinyOutput
-from diffusers.models.unet_2d_condition import UNet2DConditionOutput
-from diffusers.models.vae import DecoderOutput
+from diffusers.models.autoencoders.autoencoder_tiny import AutoencoderTinyOutput
+from diffusers.models.unets.unet_2d_condition import UNet2DConditionOutput
+from diffusers.models.autoencoders.vae import DecoderOutput
 from polygraphy import cuda
 
 from .utilities import Engine
@@ -23,10 +23,14 @@ class UNet2DConditionModelEngine:
         latent_model_input: torch.Tensor,
         timestep: torch.Tensor,
         encoder_hidden_states: torch.Tensor,
+        *kvo_cache_list,
         **kwargs,
     ) -> Any:
         if timestep.dtype != torch.float32:
             timestep = timestep.float()
+
+        kvo_cache_in_dict = {"kvo_cache_in_{i}": kvo_cache.shape for i, kvo_cache in enumerate(kvo_cache_list)}
+        kvo_cache_out_dict = {"kvo_cache_out_{i}": kvo_cache.shape for i, kvo_cache in enumerate(kvo_cache_list)}
 
         self.engine.allocate_buffers(
             shape_dict={
@@ -34,20 +38,25 @@ class UNet2DConditionModelEngine:
                 "timestep": timestep.shape,
                 "encoder_hidden_states": encoder_hidden_states.shape,
                 "latent": latent_model_input.shape,
+                **kvo_cache_in_dict,
+                **kvo_cache_out_dict,
             },
             device=latent_model_input.device,
         )
 
-        noise_pred = self.engine.infer(
+        output = self.engine.infer(
             {
                 "sample": latent_model_input,
                 "timestep": timestep,
                 "encoder_hidden_states": encoder_hidden_states,
+                **kvo_cache_in_dict,
             },
             self.stream,
             use_cuda_graph=self.use_cuda_graph,
-        )["latent"]
-        return UNet2DConditionOutput(sample=noise_pred)
+        )
+        noise_pred = output["latent"]
+        kvo_cache_out = [output[f"kvo_cache_out_{i}"] for i in range(len(kvo_cache_list))]
+        return UNet2DConditionOutput(sample=noise_pred, kvo_cache=kvo_cache_out)
 
     def to(self, *args, **kwargs):
         pass

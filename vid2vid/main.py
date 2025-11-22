@@ -24,7 +24,7 @@ def main(
     guidance_scale: float = 1.0,
     diffusion_steps: int = 3,
     noise_strength: float = 0.4,
-    acceleration: Literal["none", "xformers", "tensorrt"] = "none",
+    acceleration: Literal["none", "xformers", "tensorrt"] = "tensorrt",
     dtype: Literal["float16", "bfloat16", "float32"] = "float16",
     use_denoising_batch: bool = True,
     use_cached_attn: bool = True,

@@ -133,13 +133,22 @@ class CachedSTAttnProcessor2_0:
         key = attn.to_k(encoder_hidden_states, *args)
         value = attn.to_v(encoder_hidden_states, *args)
 
-        if is_selfattn:
-            cached_key = key.clone()
-            cached_value = value.clone()
+        if kvo_cache is not None:
+            cached_key = kvo_cache[0]
+            cached_value = kvo_cache[1]
+            cached_output = kvo_cache[2]
+        else:
+            cached_key, cached_value, cached_output = None, None, None
 
-            if len(self.cached_key) > 0:
-                key = torch.cat([key] + list(self.cached_key), dim=1)
-                value = torch.cat([value] + list(self.cached_value), dim=1)
+        if is_selfattn:
+            curr_key = key.clone()
+            curr_value = value.clone()
+
+            if cached_key is not None:
+                cached_key_reshaped = cached_key.transpose(0, 1).flatten(1, 2)
+                cached_value_reshaped = cached_value.transpose(0, 1).flatten(1, 2)
+                key = torch.cat([curr_key, cached_key_reshaped], dim=1)
+                value = torch.cat([curr_value, cached_value_reshaped], dim=1)
 
         inner_dim = key.shape[-1]
         head_dim = inner_dim // attn.heads
@@ -172,26 +181,22 @@ class CachedSTAttnProcessor2_0:
         hidden_states = hidden_states / attn.rescale_output_factor
 
         if is_selfattn:
-            cached_output = hidden_states.clone()
+            curr_output = hidden_states.clone()
 
             if self.use_feature_injection and ("up_blocks.0" in self.name or "up_blocks.1" in self.name or 'mid_block' in self.name):
-                if len(self.cached_output) > 0:
-                    nn_hidden_states = get_nn_feats(hidden_states, self.cached_output, threshold=self.threshold)
+                if cached_output is not None:
+                    cached_output_reshaped = cached_output.transpose(0, 1).flatten(1, 2)
+                    nn_hidden_states = get_nn_feats(hidden_states, cached_output_reshaped, threshold=self.threshold)
                     hidden_states = hidden_states * (1-self.fi_strength) + self.fi_strength * nn_hidden_states
 
-        if self.frame_id % self.interval == 0:
-            if is_selfattn:
-                if self.use_tome_cache:
-                    self._tome_step_kvout(cached_key, cached_value, cached_output)
-                else:
-                    self.cached_key.append(cached_key)
-                    self.cached_value.append(cached_value)
-                    self.cached_output.append(cached_output)
-        
-        self.frame_id += 1
-        
+        if is_selfattn:
+            cached_key = torch.cat([cached_key[1:], curr_key.unsqueeze(0)], dim=0)
+            cached_value = torch.cat([cached_value[1:], curr_value.unsqueeze(0)], dim=0)
+            cached_output = torch.cat([cached_output[1:], curr_output.unsqueeze(0)], dim=0)
+            
+            kvo_cache = torch.stack([cached_key, cached_value, cached_output], dim=0)
+                
         return hidden_states, kvo_cache
-
 
 
 class CachedSTXFormersAttnProcessor:

@@ -87,6 +87,25 @@ class StreamV2V:
 
         self.inference_time_ema = 0
 
+        self.kvo_cache = [
+            torch.zeros(3, 4, 3, 4096, 320, dtype=torch.float16).to(self.device),
+            torch.zeros(3, 4, 3, 4096, 320, dtype=torch.float16).to(self.device),
+            torch.zeros(3, 4, 3, 1024, 640, dtype=torch.float16).to(self.device),
+            torch.zeros(3, 4, 3, 1024, 640, dtype=torch.float16).to(self.device),
+            torch.zeros(3, 4, 3, 256, 1280, dtype=torch.float16).to(self.device),
+            torch.zeros(3, 4, 3, 256, 1280, dtype=torch.float16).to(self.device),
+            torch.zeros(3, 4, 3, 64, 1280, dtype=torch.float16).to(self.device),
+            torch.zeros(3, 4, 3, 256, 1280, dtype=torch.float16).to(self.device),
+            torch.zeros(3, 4, 3, 256, 1280, dtype=torch.float16).to(self.device),
+            torch.zeros(3, 4, 3, 256, 1280, dtype=torch.float16).to(self.device),
+            torch.zeros(3, 4, 3, 1024, 640, dtype=torch.float16).to(self.device),
+            torch.zeros(3, 4, 3, 1024, 640, dtype=torch.float16).to(self.device),
+            torch.zeros(3, 4, 3, 1024, 640, dtype=torch.float16).to(self.device),
+            torch.zeros(3, 4, 3, 4096, 320, dtype=torch.float16).to(self.device),
+            torch.zeros(3, 4, 3, 4096, 320, dtype=torch.float16).to(self.device),
+            torch.zeros(3, 4, 3, 4096, 320, dtype=torch.float16).to(self.device)
+        ]
+
     def load_lcm_lora(
         self,
         pretrained_model_name_or_path_or_dict: Union[
@@ -326,12 +345,12 @@ class StreamV2V:
         else:
             x_t_latent_plus_uc = x_t_latent
 
-        model_pred = self.unet(
+        model_pred, self.kvo_cache = self.unet(
             x_t_latent_plus_uc,
             t_list,
-            encoder_hidden_states=self.prompt_embeds,
-            return_dict=False,
-        )[0]
+            self.prompt_embeds,
+            *self.kvo_cache,
+        )
 
         if self.guidance_scale > 1.0 and (self.cfg_type == "initialize"):
             noise_pred_text = model_pred[1:]

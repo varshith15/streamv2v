@@ -6,13 +6,37 @@ from typing import List, Literal, Optional, Union, Dict
 
 import numpy as np
 import torch
-from diffusers import AutoencoderTiny, StableDiffusionPipeline, StableDiffusionXLPipeline
+from diffusers import AutoencoderTiny, StableDiffusionPipeline, StableDiffusionXLPipeline, UNet2DConditionModel
 from diffusers.models.attention_processor import XFormersAttnProcessor, AttnProcessor2_0
 from PIL import Image
 
 from streamv2v import StreamV2V
 from streamv2v.image_utils import postprocess_image
 from streamv2v.models.attention_processor import CachedSTXFormersAttnProcessor, CachedSTAttnProcessor2_0
+
+
+class UNet2DConditionModelV2V(torch.nn.Module):
+    def __init__(self, unet: UNet2DConditionModel):
+        super().__init__()
+        self.unet = unet
+        self.kvo_cache_structure = [2, 2, 2, 1, 3, 3, 3]
+
+    def forward(self, x: torch.Tensor, timestep: torch.Tensor, encoder_hidden_states: torch.Tensor, *kvo_cache):
+        formatted_cache = []
+        idx = 0
+        for num_layers in self.kvo_cache_structure:
+            block = []
+            for _ in range(num_layers):
+                block.append([kvo_cache[idx]])
+                idx += 1
+            formatted_cache.append(block)
+        
+        model_pred, formatted_cache = self.unet(x, timestep, encoder_hidden_states, kvo_cache=formatted_cache, return_dict=False)
+        kvo_cache = []
+        for block in formatted_cache:
+            for layer in block:
+                kvo_cache.append(layer[0])
+        return model_pred, *kvo_cache
 
 
 torch.set_grad_enabled(False)
@@ -510,6 +534,8 @@ class StreamV2VWrapper:
                     device=pipe.device, dtype=pipe.dtype
                 )
 
+        stream.unet = UNet2DConditionModelV2V(stream.unet)
+
         try:
             if acceleration == "none":
                 if self.use_cached_attn:
@@ -550,27 +576,39 @@ class StreamV2VWrapper:
                     stream.pipe.unet.set_attn_processor(new_attn_processors)
 
             if acceleration == "tensorrt":
+                import sys
+                import site
+                cuda_lib_path = None
+                for site_pkg in site.getsitepackages():
+                    potential_path = os.path.join(site_pkg, 'nvidia', 'cuda_runtime', 'lib')
+                    if os.path.exists(potential_path):
+                        cuda_lib_path = potential_path
+                        break
+                
+                if cuda_lib_path:
+                    current_ld_path = os.environ.get('LD_LIBRARY_PATH', '')
+                    if cuda_lib_path not in current_ld_path:
+                        os.environ['LD_LIBRARY_PATH'] = f"{cuda_lib_path}:{current_ld_path}" if current_ld_path else cuda_lib_path
+                
+
                 if self.use_cached_attn:
-                    raise NotImplementedError("TensorRT seems not support the costom attention_processor")
-                else:
-                    stream.pipe.enable_xformers_memory_efficient_attention()
-                    if self.use_cached_attn:
-                        attn_processors = stream.pipe.unet.attn_processors
-                        new_attn_processors = {}
-                        for key, attn_processor in attn_processors.items():
-                            assert isinstance(attn_processor, XFormersAttnProcessor), \
-                                "We only replace 'XFormersAttnProcessor' to 'CachedSTXFormersAttnProcessor'"
-                            new_attn_processors[key] = CachedSTXFormersAttnProcessor(name=key,
-                                                                                    use_feature_injection=self.use_feature_injection,
-                                                                                    feature_injection_strength=self.feature_injection_strength,
-                                                                                    feature_similarity_threshold=self.feature_similarity_threshold,
-                                                                                    interval=self.cache_interval, 
-                                                                                    max_frames=self.cache_maxframes,
-                                                                                    use_tome_cache=self.use_tome_cache,
-                                                                                    tome_metric=self.tome_metric,
-                                                                                    tome_ratio=self.tome_ratio,
-                                                                                    use_grid=self.use_grid)
-                        stream.pipe.unet.set_attn_processor(new_attn_processors)
+                    attn_processors = stream.pipe.unet.attn_processors
+                    new_attn_processors = {}
+                    for key, attn_processor in attn_processors.items():
+                        assert isinstance(attn_processor, AttnProcessor2_0), \
+                              "We only replace 'AttentionProcessor' to 'CachedSTAttentionProcessor'"
+                        new_attn_processors[key] = CachedSTAttnProcessor2_0(name=key,
+                                                                            use_feature_injection=self.use_feature_injection,
+                                                                            feature_injection_strength=self.feature_injection_strength,
+                                                                            feature_similarity_threshold=self.feature_similarity_threshold,
+                                                                            interval=self.cache_interval, 
+                                                                            max_frames=self.cache_maxframes,
+                                                                            use_tome_cache=self.use_tome_cache,
+                                                                            tome_metric=self.tome_metric,
+                                                                            tome_ratio=self.tome_ratio,
+                                                                            use_grid=self.use_grid)
+                    stream.pipe.unet.set_attn_processor(new_attn_processors)
+                
 
                 from polygraphy import cuda
                 from streamv2v.acceleration.tensorrt import (
@@ -637,10 +675,10 @@ class StreamV2VWrapper:
                         max_batch_size=stream.trt_unet_batch_size,
                         min_batch_size=stream.trt_unet_batch_size,
                         embedding_dim=stream.text_encoder.config.hidden_size,
-                        unet_dim=stream.unet.config.in_channels,
+                        unet_dim=stream.unet.unet.config.in_channels,
                     )
                     compile_unet(
-                        unet_network,
+                        stream.unet,
                         unet_model,
                         unet_path + ".onnx",
                         unet_path + ".opt.onnx",
