@@ -507,6 +507,7 @@ class StreamV2VWrapper:
             frame_buffer_size=self.frame_buffer_size,
             use_denoising_batch=self.use_denoising_batch,
             cfg_type=cfg_type,
+            cache_maxframes=self.cache_maxframes,
         )
         if not self.sd_turbo:
             if use_lcm_lora:
@@ -676,6 +677,7 @@ class StreamV2VWrapper:
                         min_batch_size=stream.trt_unet_batch_size,
                         embedding_dim=stream.text_encoder.config.hidden_size,
                         unet_dim=stream.unet.unet.config.in_channels,
+                        cache_maxframes=self.cache_maxframes,
                     )
                     compile_unet(
                         stream.unet,

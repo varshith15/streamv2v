@@ -229,6 +229,7 @@ class UNet(BaseModel):
         embedding_dim=768,
         text_maxlen=77,
         unet_dim=4,
+        cache_maxframes=1,
     ):
         super(UNet, self).__init__(
             fp16=fp16,
@@ -240,6 +241,7 @@ class UNet(BaseModel):
         )
         self.unet_dim = unet_dim
         self.name = "UNet"
+        self.cache_maxframes = cache_maxframes
 
     def get_input_names(self):
         return ["sample", "timestep", "encoder_hidden_states"] + self.get_kvo_cache_names("in")
@@ -251,22 +253,22 @@ class UNet(BaseModel):
         return [f"kvo_cache_{in_out}_0", f"kvo_cache_{in_out}_1", f"kvo_cache_{in_out}_2", f"kvo_cache_{in_out}_3", f"kvo_cache_{in_out}_4", f"kvo_cache_{in_out}_5", f"kvo_cache_{in_out}_6", f"kvo_cache_{in_out}_7", f"kvo_cache_{in_out}_8", f"kvo_cache_{in_out}_9", f"kvo_cache_{in_out}_10", f"kvo_cache_{in_out}_11", f"kvo_cache_{in_out}_12", f"kvo_cache_{in_out}_13", f"kvo_cache_{in_out}_14", f"kvo_cache_{in_out}_15"]
 
     def get_kvo_cache_input_profile(self, min_batch, batch_size, max_batch):
-        return [[(3, 4, min_batch, 4096, 320), (3, 4, batch_size, 4096, 320), (3, 4, max_batch, 4096, 320)],
-                [(3, 4, min_batch, 4096, 320), (3, 4, batch_size, 4096, 320), (3, 4, max_batch, 4096, 320)],
-                [(3, 4, min_batch, 1024, 640), (3, 4, batch_size, 1024, 640), (3, 4, max_batch, 1024, 640)],
-                [(3, 4, min_batch, 1024, 640), (3, 4, batch_size, 1024, 640), (3, 4, max_batch, 1024, 640)],
-                [(3, 4, min_batch, 256, 1280), (3, 4, batch_size, 256, 1280), (3, 4, max_batch, 256, 1280)],
-                [(3, 4, min_batch, 256, 1280), (3, 4, batch_size, 256, 1280), (3, 4, max_batch, 256, 1280)],
-                [(3, 4, min_batch, 64, 1280), (3, 4, batch_size, 64, 1280), (3, 4, max_batch, 64, 1280)],
-                [(3, 4, min_batch, 256, 1280), (3, 4, batch_size, 256, 1280), (3, 4, max_batch, 256, 1280)],
-                [(3, 4, min_batch, 256, 1280), (3, 4, batch_size, 256, 1280), (3, 4, max_batch, 256, 1280)],
-                [(3, 4, min_batch, 256, 1280), (3, 4, batch_size, 256, 1280), (3, 4, max_batch, 256, 1280)],
-                [(3, 4, min_batch, 1024, 640), (3, 4, batch_size, 1024, 640), (3, 4, max_batch, 1024, 640)],
-                [(3, 4, min_batch, 1024, 640), (3, 4, batch_size, 1024, 640), (3, 4, max_batch, 1024, 640)],
-                [(3, 4, min_batch, 1024, 640), (3, 4, batch_size, 1024, 640), (3, 4, max_batch, 1024, 640)],
-                [(3, 4, min_batch, 4096, 320), (3, 4, batch_size, 4096, 320), (3, 4, max_batch, 4096, 320)],
-                [(3, 4, min_batch, 4096, 320), (3, 4, batch_size, 4096, 320), (3, 4, max_batch, 4096, 320)],
-                [(3, 4, min_batch, 4096, 320), (3, 4, batch_size, 4096, 320), (3, 4, max_batch, 4096, 320)]]
+        return [[(3, self.cache_maxframes, min_batch, 4096, 320), (3, self.cache_maxframes, batch_size, 4096, 320), (3, self.cache_maxframes, max_batch, 4096, 320)],
+                [(3, self.cache_maxframes, min_batch, 4096, 320), (3, self.cache_maxframes, batch_size, 4096, 320), (3, self.cache_maxframes, max_batch, 4096, 320)],
+                [(3, self.cache_maxframes, min_batch, 1024, 640), (3, self.cache_maxframes, batch_size, 1024, 640), (3, self.cache_maxframes, max_batch, 1024, 640)],
+                [(3, self.cache_maxframes, min_batch, 1024, 640), (3, self.cache_maxframes, batch_size, 1024, 640), (3, self.cache_maxframes, max_batch, 1024, 640)],
+                [(3, self.cache_maxframes, min_batch, 256, 1280), (3, self.cache_maxframes, batch_size, 256, 1280), (3, self.cache_maxframes, max_batch, 256, 1280)],
+                [(3, self.cache_maxframes, min_batch, 256, 1280), (3, self.cache_maxframes, batch_size, 256, 1280), (3, self.cache_maxframes, max_batch, 256, 1280)],
+                [(3, self.cache_maxframes, min_batch, 64, 1280), (3, self.cache_maxframes, batch_size, 64, 1280), (3, self.cache_maxframes, max_batch, 64, 1280)],
+                [(3, self.cache_maxframes, min_batch, 256, 1280), (3, self.cache_maxframes, batch_size, 256, 1280), (3, self.cache_maxframes, max_batch, 256, 1280)],
+                [(3, self.cache_maxframes, min_batch, 256, 1280), (3, self.cache_maxframes, batch_size, 256, 1280), (3, self.cache_maxframes, max_batch, 256, 1280)],
+                [(3, self.cache_maxframes, min_batch, 256, 1280), (3, self.cache_maxframes, batch_size, 256, 1280), (3, self.cache_maxframes, max_batch, 256, 1280)],
+                [(3, self.cache_maxframes, min_batch, 1024, 640), (3, self.cache_maxframes, batch_size, 1024, 640), (3, self.cache_maxframes, max_batch, 1024, 640)],
+                [(3, self.cache_maxframes, min_batch, 1024, 640), (3, self.cache_maxframes, batch_size, 1024, 640), (3, self.cache_maxframes, max_batch, 1024, 640)],
+                [(3, self.cache_maxframes, min_batch, 1024, 640), (3, self.cache_maxframes, batch_size, 1024, 640), (3, self.cache_maxframes, max_batch, 1024, 640)],
+                [(3, self.cache_maxframes, min_batch, 4096, 320), (3, self.cache_maxframes, batch_size, 4096, 320), (3, self.cache_maxframes, max_batch, 4096, 320)],
+                [(3, self.cache_maxframes, min_batch, 4096, 320), (3, self.cache_maxframes, batch_size, 4096, 320), (3, self.cache_maxframes, max_batch, 4096, 320)],
+                [(3, self.cache_maxframes, min_batch, 4096, 320), (3, self.cache_maxframes, batch_size, 4096, 320), (3, self.cache_maxframes, max_batch, 4096, 320)]]
 
     def get_dynamic_axes(self):
         return {
@@ -308,22 +310,22 @@ class UNet(BaseModel):
         }
 
     def get_kvo_cache_shape(self, batch_size):
-        return [(3, 4, batch_size, 4096, 320),
-                (3, 4, batch_size, 4096, 320),
-                (3, 4, batch_size, 1024, 640),
-                (3, 4, batch_size, 1024, 640),
-                (3, 4, batch_size, 256, 1280),
-                (3, 4, batch_size, 256, 1280),
-                (3, 4, batch_size, 64, 1280),
-                (3, 4, batch_size, 256, 1280),
-                (3, 4, batch_size, 256, 1280),
-                (3, 4, batch_size, 256, 1280),
-                (3, 4, batch_size, 1024, 640),
-                (3, 4, batch_size, 1024, 640),
-                (3, 4, batch_size, 1024, 640),
-                (3, 4, batch_size, 4096, 320),
-                (3, 4, batch_size, 4096, 320),
-                (3, 4, batch_size, 4096, 320)]
+        return [(3, self.cache_maxframes, batch_size, 4096, 320),
+                (3, self.cache_maxframes, batch_size, 4096, 320),
+                (3, self.cache_maxframes, batch_size, 1024, 640),
+                (3, self.cache_maxframes, batch_size, 1024, 640),
+                (3, self.cache_maxframes, batch_size, 256, 1280),
+                (3, self.cache_maxframes, batch_size, 256, 1280),
+                (3, self.cache_maxframes, batch_size, 64, 1280),
+                (3, self.cache_maxframes, batch_size, 256, 1280),
+                (3, self.cache_maxframes, batch_size, 256, 1280),
+                (3, self.cache_maxframes, batch_size, 256, 1280),
+                (3, self.cache_maxframes, batch_size, 1024, 640),
+                (3, self.cache_maxframes, batch_size, 1024, 640),
+                (3, self.cache_maxframes, batch_size, 1024, 640),
+                (3, self.cache_maxframes, batch_size, 4096, 320),
+                (3, self.cache_maxframes, batch_size, 4096, 320),
+                (3, self.cache_maxframes, batch_size, 4096, 320)]
 
     def get_shape_dict(self, batch_size, image_height, image_width):
         latent_height, latent_width = self.check_dims(batch_size, image_height, image_width)
@@ -345,22 +347,22 @@ class UNet(BaseModel):
             ),
             torch.ones((2 * batch_size,), dtype=torch.float32, device=self.device),
             torch.randn(2 * batch_size, self.text_maxlen, self.embedding_dim, dtype=dtype, device=self.device),
-            torch.zeros(3, 4, 2 * batch_size, 4096, 320, dtype=torch.float16).to(self.device),
-            torch.zeros(3, 4, 2 * batch_size, 4096, 320, dtype=torch.float16).to(self.device),
-            torch.zeros(3, 4, 2 * batch_size, 1024, 640, dtype=torch.float16).to(self.device),
-            torch.zeros(3, 4, 2 * batch_size, 1024, 640, dtype=torch.float16).to(self.device),
-            torch.zeros(3, 4, 2 * batch_size, 256, 1280, dtype=torch.float16).to(self.device),
-            torch.zeros(3, 4, 2 * batch_size, 256, 1280, dtype=torch.float16).to(self.device),
-            torch.zeros(3, 4, 2 * batch_size, 64, 1280, dtype=torch.float16).to(self.device),
-            torch.zeros(3, 4, 2 * batch_size, 256, 1280, dtype=torch.float16).to(self.device),
-            torch.zeros(3, 4, 2 * batch_size, 256, 1280, dtype=torch.float16).to(self.device),
-            torch.zeros(3, 4, 2 * batch_size, 256, 1280, dtype=torch.float16).to(self.device),
-            torch.zeros(3, 4, 2 * batch_size, 1024, 640, dtype=torch.float16).to(self.device),
-            torch.zeros(3, 4, 2 * batch_size, 1024, 640, dtype=torch.float16).to(self.device),
-            torch.zeros(3, 4, 2 * batch_size, 1024, 640, dtype=torch.float16).to(self.device),
-            torch.zeros(3, 4, 2 * batch_size, 4096, 320, dtype=torch.float16).to(self.device),
-            torch.zeros(3, 4, 2 * batch_size, 4096, 320, dtype=torch.float16).to(self.device),
-            torch.zeros(3, 4, 2 * batch_size, 4096, 320, dtype=torch.float16).to(self.device)
+            torch.zeros(3, self.cache_maxframes, 2 * batch_size, 4096, 320, dtype=torch.float16).to(self.device),
+            torch.zeros(3, self.cache_maxframes, 2 * batch_size, 4096, 320, dtype=torch.float16).to(self.device),
+            torch.zeros(3, self.cache_maxframes, 2 * batch_size, 1024, 640, dtype=torch.float16).to(self.device),
+            torch.zeros(3, self.cache_maxframes, 2 * batch_size, 1024, 640, dtype=torch.float16).to(self.device),
+            torch.zeros(3, self.cache_maxframes, 2 * batch_size, 256, 1280, dtype=torch.float16).to(self.device),
+            torch.zeros(3, self.cache_maxframes, 2 * batch_size, 256, 1280, dtype=torch.float16).to(self.device),
+            torch.zeros(3, self.cache_maxframes, 2 * batch_size, 64, 1280, dtype=torch.float16).to(self.device),
+            torch.zeros(3, self.cache_maxframes, 2 * batch_size, 256, 1280, dtype=torch.float16).to(self.device),
+            torch.zeros(3, self.cache_maxframes, 2 * batch_size, 256, 1280, dtype=torch.float16).to(self.device),
+            torch.zeros(3, self.cache_maxframes, 2 * batch_size, 256, 1280, dtype=torch.float16).to(self.device),
+            torch.zeros(3, self.cache_maxframes, 2 * batch_size, 1024, 640, dtype=torch.float16).to(self.device),
+            torch.zeros(3, self.cache_maxframes, 2 * batch_size, 1024, 640, dtype=torch.float16).to(self.device),
+            torch.zeros(3, self.cache_maxframes, 2 * batch_size, 1024, 640, dtype=torch.float16).to(self.device),
+            torch.zeros(3, self.cache_maxframes, 2 * batch_size, 4096, 320, dtype=torch.float16).to(self.device),
+            torch.zeros(3, self.cache_maxframes, 2 * batch_size, 4096, 320, dtype=torch.float16).to(self.device),
+            torch.zeros(3, self.cache_maxframes, 2 * batch_size, 4096, 320, dtype=torch.float16).to(self.device)
         )
 
 

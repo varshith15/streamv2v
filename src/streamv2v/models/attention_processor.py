@@ -145,8 +145,8 @@ class CachedSTAttnProcessor2_0:
             curr_value = value.clone()
 
             if cached_key is not None:
-                cached_key_reshaped = cached_key.transpose(0, 1).flatten(1, 2)
-                cached_value_reshaped = cached_value.transpose(0, 1).flatten(1, 2)
+                cached_key_reshaped = cached_key.transpose(0, 1).contiguous().flatten(1, 2)
+                cached_value_reshaped = cached_value.transpose(0, 1).contiguous().flatten(1, 2)
                 try:
                     key = torch.cat([curr_key, cached_key_reshaped], dim=1)
                     value = torch.cat([curr_value, cached_value_reshaped], dim=1)
@@ -191,7 +191,7 @@ class CachedSTAttnProcessor2_0:
 
             if self.use_feature_injection and ("up_blocks.0" in self.name or "up_blocks.1" in self.name or 'mid_block' in self.name):
                 if cached_output is not None:
-                    cached_output_reshaped = cached_output.transpose(0, 1).flatten(1, 2)
+                    cached_output_reshaped = cached_output.transpose(0, 1).contiguous().flatten(1, 2)
                     nn_hidden_states = get_nn_feats(hidden_states, cached_output_reshaped, threshold=self.threshold)
                     hidden_states = hidden_states * (1-self.fi_strength) + self.fi_strength * nn_hidden_states
 
