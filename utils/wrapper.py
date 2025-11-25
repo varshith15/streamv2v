@@ -2,42 +2,19 @@ import gc
 import os
 from pathlib import Path
 import traceback
+import logging
 from typing import List, Literal, Optional, Union, Dict
 
 import numpy as np
 import torch
-from diffusers import AutoencoderTiny, StableDiffusionPipeline, StableDiffusionXLPipeline, UNet2DConditionModel
+from diffusers import AutoencoderTiny, StableDiffusionPipeline, StableDiffusionXLPipeline
 from diffusers.models.attention_processor import XFormersAttnProcessor, AttnProcessor2_0
 from PIL import Image
 
 from streamv2v import StreamV2V
 from streamv2v.image_utils import postprocess_image
+from streamv2v.acceleration.tensorrt import UNet2DConditionModelV2V
 from streamv2v.models.attention_processor import CachedSTXFormersAttnProcessor, CachedSTAttnProcessor2_0
-
-
-class UNet2DConditionModelV2V(torch.nn.Module):
-    def __init__(self, unet: UNet2DConditionModel):
-        super().__init__()
-        self.unet = unet
-        self.kvo_cache_structure = [2, 2, 2, 1, 3, 3, 3]
-
-    def forward(self, x: torch.Tensor, timestep: torch.Tensor, encoder_hidden_states: torch.Tensor, *kvo_cache):
-        formatted_cache = []
-        idx = 0
-        for num_layers in self.kvo_cache_structure:
-            block = []
-            for _ in range(num_layers):
-                block.append([kvo_cache[idx]])
-                idx += 1
-            formatted_cache.append(block)
-        
-        model_pred, formatted_cache = self.unet(x, timestep, encoder_hidden_states, kvo_cache=formatted_cache, return_dict=False)
-        kvo_cache_out = []
-        for block in formatted_cache:
-            for layer in block:
-                kvo_cache_out.append(layer[0])
-        return model_pred, kvo_cache_out
-
 
 torch.set_grad_enabled(False)
 torch.backends.cuda.matmul.allow_tf32 = True
@@ -422,6 +399,8 @@ class StreamV2VWrapper:
         cfg_type: Literal["none", "full", "self", "initialize"] = "self",
         seed: int = 2,
         engine_dir: Optional[Union[str, Path]] = "engines",
+        min_cache_maxframes: int = 1,
+        max_cache_maxframes: int = 4,
     ) -> StreamV2V:
         """
         Loads the model.
@@ -535,7 +514,11 @@ class StreamV2VWrapper:
                     device=pipe.device, dtype=pipe.dtype
                 )
 
-        stream.unet = UNet2DConditionModelV2V(stream.unet)
+        if self.use_cached_attn:
+            from streamv2v.models.utils import create_kvo_cache
+            kvo_cache, kvo_cache_structure = create_kvo_cache(stream.unet, batch_size=self.batch_size, cache_maxframes=self.cache_maxframes, height=self.height, width=self.width)
+            stream.unet = UNet2DConditionModelV2V(stream.unet, kvo_cache_structure=kvo_cache_structure)
+            stream.kvo_cache = kvo_cache
 
         try:
             if acceleration == "none":
@@ -593,6 +576,7 @@ class StreamV2VWrapper:
                 
 
                 if self.use_cached_attn:
+                    logging.info("NOTE: cache interval and tome_cache are not supported for TensorRT acceleration with cached attention.")
                     attn_processors = stream.pipe.unet.attn_processors
                     new_attn_processors = {}
                     for key, attn_processor in attn_processors.items():
@@ -671,12 +655,17 @@ class StreamV2VWrapper:
                 if not os.path.exists(unet_path):
                     os.makedirs(os.path.dirname(unet_path), exist_ok=True)
                     unet_model = UNet(
+                        stream.unet.unet,
                         fp16=True,
                         device=stream.device,
                         max_batch_size=stream.trt_unet_batch_size,
                         min_batch_size=stream.trt_unet_batch_size,
                         embedding_dim=stream.text_encoder.config.hidden_size,
                         unet_dim=stream.unet.unet.config.in_channels,
+                        height=self.height,
+                        width=self.width,
+                        min_cache_maxframes=min_cache_maxframes,
+                        max_cache_maxframes=max_cache_maxframes,
                         cache_maxframes=self.cache_maxframes,
                     )
                     compile_unet(

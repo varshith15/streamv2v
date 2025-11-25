@@ -33,6 +33,7 @@ class StreamV2V:
         frame_buffer_size: int = 1,
         cfg_type: Literal["none", "full", "self", "initialize"] = "self",
         cache_maxframes: int = 1,
+        kvo_cache: List[torch.Tensor] = None,
     ) -> None:
         self.device = pipe.device
         self.dtype = torch_dtype
@@ -89,25 +90,7 @@ class StreamV2V:
         self.cached_x_t_latent = deque(maxlen=4)
 
         self.inference_time_ema = 0
-
-        self.kvo_cache = [
-            torch.zeros(3, self.cache_maxframes, self.batch_size, 4096, 320, dtype=torch.float16).to(self.device),
-            torch.zeros(3, self.cache_maxframes, self.batch_size, 4096, 320, dtype=torch.float16).to(self.device),
-            torch.zeros(3, self.cache_maxframes, self.batch_size, 1024, 640, dtype=torch.float16).to(self.device),
-            torch.zeros(3, self.cache_maxframes, self.batch_size, 1024, 640, dtype=torch.float16).to(self.device),
-            torch.zeros(3, self.cache_maxframes, self.batch_size, 256, 1280, dtype=torch.float16).to(self.device),
-            torch.zeros(3, self.cache_maxframes, self.batch_size, 256, 1280, dtype=torch.float16).to(self.device),
-            torch.zeros(3, self.cache_maxframes, self.batch_size, 64, 1280, dtype=torch.float16).to(self.device),
-            torch.zeros(3, self.cache_maxframes, self.batch_size, 256, 1280, dtype=torch.float16).to(self.device),
-            torch.zeros(3, self.cache_maxframes, self.batch_size, 256, 1280, dtype=torch.float16).to(self.device),
-            torch.zeros(3, self.cache_maxframes, self.batch_size, 256, 1280, dtype=torch.float16).to(self.device),
-            torch.zeros(3, self.cache_maxframes, self.batch_size, 1024, 640, dtype=torch.float16).to(self.device),
-            torch.zeros(3, self.cache_maxframes, self.batch_size, 1024, 640, dtype=torch.float16).to(self.device),
-            torch.zeros(3, self.cache_maxframes, self.batch_size, 1024, 640, dtype=torch.float16).to(self.device),
-            torch.zeros(3, self.cache_maxframes, self.batch_size, 4096, 320, dtype=torch.float16).to(self.device),
-            torch.zeros(3, self.cache_maxframes, self.batch_size, 4096, 320, dtype=torch.float16).to(self.device),
-            torch.zeros(3, self.cache_maxframes, self.batch_size, 4096, 320, dtype=torch.float16).to(self.device)
-        ]
+        self.kvo_cache = kvo_cache
 
     def load_lcm_lora(
         self,

@@ -147,14 +147,8 @@ class CachedSTAttnProcessor2_0:
             if cached_key is not None:
                 cached_key_reshaped = cached_key.transpose(0, 1).contiguous().flatten(1, 2)
                 cached_value_reshaped = cached_value.transpose(0, 1).contiguous().flatten(1, 2)
-                try:
-                    key = torch.cat([curr_key, cached_key_reshaped], dim=1)
-                    value = torch.cat([curr_value, cached_value_reshaped], dim=1)
-                except Exception as e:
-                    print(self.name)
-                    print(cached_key_reshaped.shape, curr_key.shape, cached_key.shape)
-                    print(cached_value_reshaped.shape, curr_value.shape, cached_value.shape)
-                    exit(0)
+                key = torch.cat([curr_key, cached_key_reshaped], dim=1)
+                value = torch.cat([curr_value, cached_value_reshaped], dim=1)
 
         inner_dim = key.shape[-1]
         head_dim = inner_dim // attn.heads
@@ -196,9 +190,14 @@ class CachedSTAttnProcessor2_0:
                     hidden_states = hidden_states * (1-self.fi_strength) + self.fi_strength * nn_hidden_states
 
         if is_selfattn:
-            cached_key = torch.cat([cached_key[1:], curr_key.unsqueeze(0)], dim=0)
-            cached_value = torch.cat([cached_value[1:], curr_value.unsqueeze(0)], dim=0)
-            cached_output = torch.cat([cached_output[1:], curr_output.unsqueeze(0)], dim=0)
+            if self.max_frames == 1:
+                cached_key = curr_key.unsqueeze(0)
+                cached_value = curr_value.unsqueeze(0)
+                cached_output = curr_output.unsqueeze(0)
+            else:
+                cached_key = torch.cat([cached_key[1:], curr_key.unsqueeze(0)], dim=0)
+                cached_value = torch.cat([cached_value[1:], curr_value.unsqueeze(0)], dim=0)
+                cached_output = torch.cat([cached_output[1:], curr_output.unsqueeze(0)], dim=0)
             
             kvo_cache = torch.stack([cached_key, cached_value, cached_output], dim=0)
                 

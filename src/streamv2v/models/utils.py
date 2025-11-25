@@ -5,6 +5,8 @@ from einops import rearrange
 import torch
 import torch.nn.functional as F
 
+from diffusers.models.unets.unet_2d_condition import UNet2DConditionModel
+
 def get_nn_feats(x, y, threshold=0.9):
 
     if type(x) is deque:
@@ -125,3 +127,73 @@ def random_bipartite_soft_matching(
         return dst_outputs
         
     return merge_kv_out, merge_kv, merge_out
+
+def get_kvo_cache_info(unet: UNet2DConditionModel, height=512, width=512):
+    latent_height = height // 8
+    latent_width = width // 8
+    
+    kvo_cache_shapes = []
+    kvo_cache_structure = []
+    current_h, current_w = latent_height, latent_width
+    
+    for _, block in enumerate(unet.down_blocks):
+        if hasattr(block, 'attentions') and block.attentions is not None:
+            attn_count = 0
+            for attn_block in block.attentions:
+                for transformer in attn_block.transformer_blocks:
+                    attn = transformer.attn1
+                    hidden_dim = attn.to_k.out_features
+                    seq_length = current_h * current_w
+                    kvo_cache_shapes.append((seq_length, hidden_dim))
+                    attn_count += 1
+            kvo_cache_structure.append(attn_count)
+        
+        if hasattr(block, 'downsamplers') and block.downsamplers is not None:
+            current_h //= 2
+            current_w //= 2
+    
+    if hasattr(unet.mid_block, 'attentions') and unet.mid_block.attentions is not None:
+        for attn_block in unet.mid_block.attentions:
+            attn_count = 0
+            for transformer in attn_block.transformer_blocks:
+                attn = transformer.attn1
+                hidden_dim = attn.to_k.out_features
+                seq_length = current_h * current_w
+                kvo_cache_shapes.append((seq_length, hidden_dim))
+                attn_count += 1
+            kvo_cache_structure.append(attn_count)
+    
+    for _, block in enumerate(unet.up_blocks):
+        if hasattr(block, 'attentions') and block.attentions is not None:
+            attn_count = 0
+            for attn_block in block.attentions:
+                for transformer in attn_block.transformer_blocks:
+                    attn = transformer.attn1
+                    hidden_dim = attn.to_k.out_features
+                    seq_length = current_h * current_w
+                    kvo_cache_shapes.append((seq_length, hidden_dim))
+                    attn_count += 1
+            kvo_cache_structure.append(attn_count)
+        
+        if hasattr(block, 'upsamplers') and block.upsamplers is not None:
+            current_h *= 2
+            current_w *= 2
+
+    kvo_cache_count = sum(kvo_cache_structure)
+    
+    return kvo_cache_shapes, kvo_cache_structure, kvo_cache_count
+
+
+def create_kvo_cache(unet: UNet2DConditionModel, batch_size, cache_maxframes, height=512, width=512, 
+                     device='cuda', dtype=torch.float16):
+    kvo_cache_shapes, kvo_cache_structure, _ = get_kvo_cache_info(unet, height, width)
+    
+    kvo_cache = []
+    for seq_length, hidden_dim in kvo_cache_shapes:
+        cache_tensor = torch.zeros(
+            3, cache_maxframes, batch_size, seq_length, hidden_dim,
+            dtype=dtype, device=device
+        )
+        kvo_cache.append(cache_tensor)
+    
+    return kvo_cache, kvo_cache_structure

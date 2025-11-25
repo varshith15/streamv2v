@@ -32,7 +32,7 @@ def main(
     feature_injection_strength: float = 0.95,
     feature_similarity_threshold: float = 0.95,
     cache_interval: int = 1,
-    cache_maxframes: int = 2,
+    cache_maxframes: int = 1,
     use_tome_cache: bool = False,
     do_add_noise: bool = True,
     enable_similar_image_filter: bool = False,

@@ -13,6 +13,29 @@ from .builder import EngineBuilder, create_onnx_path
 from .engine import AutoencoderKLEngine, UNet2DConditionModelEngine
 from .models import VAE, BaseModel, UNet, VAEEncoder
 
+class UNet2DConditionModelV2V(torch.nn.Module):
+    def __init__(self, unet: UNet2DConditionModel, kvo_cache_structure = [2, 2, 2, 1, 3, 3, 3]):
+        super().__init__()
+        self.unet = unet
+        self.kvo_cache_structure = kvo_cache_structure
+
+    def forward(self, x: torch.Tensor, timestep: torch.Tensor, encoder_hidden_states: torch.Tensor, *kvo_cache):
+        formatted_cache = []
+        idx = 0
+        for num_layers in self.kvo_cache_structure:
+            block = []
+            for _ in range(num_layers):
+                block.append([kvo_cache[idx]])
+                idx += 1
+            formatted_cache.append(block)
+        
+        model_pred, formatted_cache = self.unet(x, timestep, encoder_hidden_states, kvo_cache=formatted_cache, return_dict=False)
+        kvo_cache_out = []
+        for block in formatted_cache:
+            for layer in block:
+                kvo_cache_out.append(layer[0])
+        return model_pred, kvo_cache_out
+
 
 class TorchVAEEncoder(torch.nn.Module):
     def __init__(self, vae: AutoencoderKL):
