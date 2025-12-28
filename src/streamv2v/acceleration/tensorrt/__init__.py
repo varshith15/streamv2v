@@ -21,7 +21,7 @@ class UNet2DConditionModelV2V(torch.nn.Module):
         self.unet = unet
         self.kvo_cache_structure = kvo_cache_structure
 
-    def forward(self, x: torch.Tensor, timestep: torch.Tensor, encoder_hidden_states: torch.Tensor, *kvo_cache):
+    def forward(self, x: torch.Tensor, timestep: torch.Tensor, encoder_hidden_states: torch.Tensor, kvo_cache: List[torch.Tensor] = []):
         formatted_cache = convert_list_to_structure(kvo_cache, self.kvo_cache_structure)
         model_pred, formatted_cache_out = self.unet(x, timestep, encoder_hidden_states, kvo_cache=formatted_cache, return_dict=False)
         kvo_cache_out = convert_structure_to_list(formatted_cache_out)
