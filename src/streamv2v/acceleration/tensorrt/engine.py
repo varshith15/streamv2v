@@ -2,7 +2,6 @@ from typing import *
 
 import torch
 from diffusers.models.autoencoders.autoencoder_tiny import AutoencoderTinyOutput
-from diffusers.models.unets.unet_2d_condition import UNet2DConditionOutput
 from diffusers.models.autoencoders.vae import DecoderOutput
 from polygraphy import cuda
 
@@ -24,16 +23,20 @@ class UNet2DConditionModelEngine:
         latent_model_input: torch.Tensor,
         timestep: torch.Tensor,
         encoder_hidden_states: torch.Tensor,
-        *kvo_cache_list,
-        **kwargs,
+        kvo_cache: List[torch.Tensor] = [],
     ) -> Any:
         if timestep.dtype != torch.float32:
             timestep = timestep.float()
 
-        kvo_cache_in_shape_dict = {f"kvo_cache_in_{i}": kvo_cache.shape for i, kvo_cache in enumerate(kvo_cache_list)}
-        kvo_cache_out_shape_dict = {f"kvo_cache_out_{i}": kvo_cache.shape for i, kvo_cache in enumerate(kvo_cache_list)}
-        kvo_cache_in_dict = {f"kvo_cache_in_{i}": kvo_cache for i, kvo_cache in enumerate(kvo_cache_list)}
-
+        kvo_cache_in_shape_dict = {f"kvo_cache_in_{i}": kvo_cache.shape for i, kvo_cache in enumerate(kvo_cache)}
+        kvo_cache_out_shape_dict = {}
+        for i, kvo_cache in enumerate(kvo_cache):
+            shape = list(kvo_cache.shape)
+            shape[1] = 1
+            kvo_cache_out_shape_dict[f"kvo_cache_out_{i}"] = tuple(shape)
+        
+        kvo_cache_in_dict = {f"kvo_cache_in_{i}": kvo_cache for i, kvo_cache in enumerate(kvo_cache)}
+        
         shape_dict = {
             "sample": latent_model_input.shape,
             "timestep": timestep.shape,
@@ -60,7 +63,10 @@ class UNet2DConditionModelEngine:
             use_cuda_graph=self.use_cuda_graph,
         )
         noise_pred = output["latent"]
-        kvo_cache_out = [output[f"kvo_cache_out_{i}"] for i in range(len(kvo_cache_list))]
+        if len(kvo_cache) > 0:
+            kvo_cache_out = [output[f"kvo_cache_out_{i}"] for i in range(len(kvo_cache))]
+        else:
+            kvo_cache_out = []
         return noise_pred, kvo_cache_out
 
     def to(self, *args, **kwargs):

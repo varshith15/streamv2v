@@ -516,9 +516,9 @@ class StreamV2VWrapper:
 
         if self.use_cached_attn:
             from streamv2v.models.utils import create_kvo_cache
-            kvo_cache, kvo_cache_structure = create_kvo_cache(stream.unet, batch_size=self.batch_size, cache_maxframes=self.cache_maxframes, height=self.height, width=self.width)
-            stream.unet = UNet2DConditionModelV2V(stream.unet, kvo_cache_structure=kvo_cache_structure)
+            kvo_cache, kvo_cache_structure = create_kvo_cache(stream.unet, batch_size=self.batch_size, cache_maxframes=self.cache_maxframes, height=self.height, width=self.width, device=self.device, dtype=self.dtype)
             stream.kvo_cache = kvo_cache
+            stream.unet = UNet2DConditionModelV2V(stream.unet, kvo_cache_structure=kvo_cache_structure)
 
         try:
             if acceleration == "none":
@@ -528,16 +528,7 @@ class StreamV2VWrapper:
                     for key, attn_processor in attn_processors.items():
                         assert isinstance(attn_processor, AttnProcessor2_0), \
                               "We only replace 'AttentionProcessor' to 'CachedSTAttentionProcessor'"
-                        new_attn_processors[key] = CachedSTAttnProcessor2_0(name=key,
-                                                                               use_feature_injection=self.use_feature_injection,
-                                                                               feature_injection_strength=self.feature_injection_strength,
-                                                                               feature_similarity_threshold=self.feature_similarity_threshold,
-                                                                               interval=self.cache_interval, 
-                                                                               max_frames=self.cache_maxframes,
-                                                                               use_tome_cache=self.use_tome_cache,
-                                                                               tome_metric=self.tome_metric,
-                                                                               tome_ratio=self.tome_ratio,
-                                                                               use_grid=self.use_grid)
+                        new_attn_processors[key] = CachedSTAttnProcessor2_0()
                     stream.pipe.unet.set_attn_processor(new_attn_processors)
             if acceleration == "xformers":
                 stream.pipe.enable_xformers_memory_efficient_attention()
@@ -582,16 +573,7 @@ class StreamV2VWrapper:
                     for key, attn_processor in attn_processors.items():
                         assert isinstance(attn_processor, AttnProcessor2_0), \
                               "We only replace 'AttentionProcessor' to 'CachedSTAttentionProcessor'"
-                        new_attn_processors[key] = CachedSTAttnProcessor2_0(name=key,
-                                                                            use_feature_injection=self.use_feature_injection,
-                                                                            feature_injection_strength=self.feature_injection_strength,
-                                                                            feature_similarity_threshold=self.feature_similarity_threshold,
-                                                                            interval=self.cache_interval, 
-                                                                            max_frames=self.cache_maxframes,
-                                                                            use_tome_cache=self.use_tome_cache,
-                                                                            tome_metric=self.tome_metric,
-                                                                            tome_ratio=self.tome_ratio,
-                                                                            use_grid=self.use_grid)
+                        new_attn_processors[key] = CachedSTAttnProcessor2_0()
                     stream.pipe.unet.set_attn_processor(new_attn_processors)
                 
 
