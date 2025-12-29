@@ -23,7 +23,7 @@ class UNet2DConditionModelEngine:
         latent_model_input: torch.Tensor,
         timestep: torch.Tensor,
         encoder_hidden_states: torch.Tensor,
-        kvo_cache: List[torch.Tensor] = [],
+        *kvo_cache,
     ) -> Any:
         if timestep.dtype != torch.float32:
             timestep = timestep.float()
@@ -106,7 +106,6 @@ class AutoencoderKLEngine:
                 images.shape[3] // self.vae_scale_factor,
             ),
         }
-        # Optimized: only reallocates if shapes changed
         self.encoder.allocate_buffers(
             shape_dict=shape_dict,
             device=images.device,
@@ -128,7 +127,6 @@ class AutoencoderKLEngine:
                 latent.shape[3] * self.vae_scale_factor,
             ),
         }
-        # Optimized: only reallocates if shapes changed
         self.decoder.allocate_buffers(
             shape_dict=shape_dict,
             device=latent.device,

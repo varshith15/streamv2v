@@ -337,7 +337,7 @@ class StreamV2V:
             x_t_latent_plus_uc,
             t_list,
             self.prompt_embeds,
-            kvo_cache=self.kvo_cache,
+            *self.kvo_cache,
         )
         
         self.update_kvo_cache(kvo_cache_out)

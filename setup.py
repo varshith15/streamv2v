@@ -31,7 +31,7 @@ def deps_list(*pkgs):
 extras = {}
 extras["xformers"] = deps_list("xformers")
 extras["torch"] = deps_list("torch", "accelerate")
-extras["tensorrt"] = deps_list("protobuf", "cuda-python", "onnx", "onnxruntime", "colored", "polygraphy")
+extras["tensorrt"] = deps_list("protobuf", "cuda-python", "onnx", "onnxruntime", "colored", "polygraphy", "onnx-graphsurgeon", "tensorrt==10.9.0.34")
 
 extras["dev"] = extras["xformers"] + extras["torch"] + extras["tensorrt"]
 

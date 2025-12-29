@@ -559,21 +559,6 @@ class StreamV2VWrapper:
                     stream.pipe.unet.set_attn_processor(new_attn_processors)
 
             if acceleration == "tensorrt":
-                import sys
-                import site
-                cuda_lib_path = None
-                for site_pkg in site.getsitepackages():
-                    potential_path = os.path.join(site_pkg, 'nvidia', 'cuda_runtime', 'lib')
-                    if os.path.exists(potential_path):
-                        cuda_lib_path = potential_path
-                        break
-                
-                if cuda_lib_path:
-                    current_ld_path = os.environ.get('LD_LIBRARY_PATH', '')
-                    if cuda_lib_path not in current_ld_path:
-                        os.environ['LD_LIBRARY_PATH'] = f"{cuda_lib_path}:{current_ld_path}" if current_ld_path else cuda_lib_path
-                
-
                 if self.use_cached_attn:
                     logging.info("NOTE: tome_cache and feature injection are not supported for TensorRT acceleration with cached attention for now.")
                     stream.kvo_cache = kvo_cache
@@ -607,12 +592,19 @@ class StreamV2VWrapper:
                     model_id_or_path: str,
                     max_batch_size: int,
                     min_batch_size: int,
+                    use_cached_attn: Optional[bool] = None,
+                    min_cache_maxframes: Optional[int] = None,
+                    max_cache_maxframes: Optional[int] = None,
                 ):
                     maybe_path = Path(model_id_or_path)
                     if maybe_path.exists():
-                        return f"{maybe_path.stem}--lcm_lora-{use_lcm_lora}--tiny_vae-{use_tiny_vae}--max_batch-{max_batch_size}--min_batch-{min_batch_size}--cache--{self.use_cached_attn}--mode-{self.mode}"
+                        model_id_or_path = maybe_path.stem
+                        
+                    if use_cached_attn is not None:
+                        cache_str = f"--cache--{use_cached_attn}--min_cache_maxframes-{min_cache_maxframes}--max_cache_maxframes-{max_cache_maxframes}"
                     else:
-                        return f"{model_id_or_path}--lcm_lora-{use_lcm_lora}--tiny_vae-{use_tiny_vae}--max_batch-{max_batch_size}--min_batch-{min_batch_size}--cache--{self.use_cached_attn}--mode-{self.mode}"
+                        cache_str = ""
+                    return f"{model_id_or_path}--lcm_lora-{use_lcm_lora}--tiny_vae-{use_tiny_vae}--max_batch-{max_batch_size}--min_batch-{min_batch_size}{cache_str}--mode-{self.mode}"
 
                 engine_dir = Path(engine_dir)
                 unet_path = os.path.join(
@@ -621,6 +613,9 @@ class StreamV2VWrapper:
                         model_id_or_path=model_id_or_path,
                         max_batch_size=stream.trt_unet_batch_size,
                         min_batch_size=stream.trt_unet_batch_size,
+                        use_cached_attn=self.use_cached_attn,
+                        min_cache_maxframes=self.cache_maxframes,
+                        max_cache_maxframes=self.cache_maxframes,
                     ),
                     "unet.engine",
                 )
