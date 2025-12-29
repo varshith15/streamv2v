@@ -17,7 +17,7 @@ CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 def main(
     input: str = "temporal_test.mp4",
-    prompt: str = "Elon Musk is giving a talk.",
+    prompt: str = "Anime girl",
     output_dir: str = os.path.join(CURRENT_DIR, "outputs"),
     model_id: str = "Jiali/stable-diffusion-1.5",
     scale: float = 1.0,
@@ -32,7 +32,7 @@ def main(
     feature_injection_strength: float = 0.95,
     feature_similarity_threshold: float = 0.95,
     cache_interval: int = 1,
-    cache_maxframes: int = 1,
+    cache_maxframes: int = 4,
     use_tome_cache: bool = False,
     do_add_noise: bool = True,
     enable_similar_image_filter: bool = False,
